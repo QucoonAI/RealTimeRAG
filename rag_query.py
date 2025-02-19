@@ -20,11 +20,11 @@ load_dotenv()
 # pinecone_api_key = os.getenv("PINECONE_API_KEY")
 # index_name = os.getenv("PINECONE_INDEX_NAME")
 
-aws_region = st.secrets.aws.AWS_REGION
-modelId = st.secrets.aws.MODEL_ID
-emb_modelId = st.secrets.aws.EMB_MODEL_ID
-pinecone_api_key = st.secrets.aws.PINECONE_API_KEY
-index_name = st.secrets.aws.PINECONE_INDEX_NAME
+aws_region = st.secrets.AWS_REGION
+modelId = st.secrets.MODEL_ID
+emb_modelId = st.secrets.EMB_MODEL_ID
+pinecone_api_key = st.secrets.PINECONE_API_KEY
+index_name = st.secrets.PINECONE_INDEX_NAME
 
 # Create session and clients
 session = boto3.Session()
