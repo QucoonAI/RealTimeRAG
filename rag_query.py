@@ -21,14 +21,16 @@ load_dotenv()
 # index_name = os.getenv("PINECONE_INDEX_NAME")
 
 aws_region = st.secrets.AWS_REGION
+aws_access_key_id = st.secrets.AWS_ACCESS_KEY_ID
+aws_secret_access_key = st.secrets.AWS_SECRET_ACCESS_KEY
 modelId = st.secrets.MODEL_ID
 emb_modelId = st.secrets.EMB_MODEL_ID
 pinecone_api_key = st.secrets.PINECONE_API_KEY
 index_name = st.secrets.PINECONE_INDEX_NAME
 
 # Create session and clients
-session = boto3.Session()
-bedrock = boto3.client(service_name='bedrock-runtime', region_name=aws_region)
+#session = boto3.Session()
+bedrock = boto3.client(service_name='bedrock-runtime', region_name = "us-east-1" , aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)    
 @st.cache_resource
 def init_pinecone():
     pc = Pinecone(api_key=pinecone_api_key)
