@@ -9,7 +9,7 @@ import yaml
 from yaml.loader import SafeLoader
 from dotenv import load_dotenv
 from pinecone import Pinecone
-from main import basic_transcribe
+#from main import basic_transcribe
 
 load_dotenv()
 
@@ -36,20 +36,20 @@ index = init_pinecone()
 
 transcription_task = None
 cancel_task = False
-async def transcribe_function():
-    try:
-        result = await basic_transcribe()
-        st.write(result)  # Display the result from the transcription
-    except asyncio.CancelledError:
-        st.write("Transcription has been cancelled.")
+# async def transcribe_function():
+#     try:
+#         result = await basic_transcribe()
+#         st.write(result)  # Display the result from the transcription
+#     except asyncio.CancelledError:
+#         st.write("Transcription has been cancelled.")
 
-def run_transcribe():
-    global transcription_task
-    try:
-        if not cancel_task:
-            asyncio.run(transcribe_function())
-    except asyncio.CancelledError:
-        st.write("Transcription task was cancelled.")
+# def run_transcribe():
+#     global transcription_task
+#     try:
+#         if not cancel_task:
+#             asyncio.run(transcribe_function())
+#     except asyncio.CancelledError:
+#         st.write("Transcription task was cancelled.")
 
 
 prompt_template = """ 
@@ -227,26 +227,26 @@ if st.session_state.get("authentication_status"):
         st.title("Welcome to the RealTime Transcribe")
         st.write("Starting transcription...")
         # Start transcription button
-        if 'transcription_in_progress' not in st.session_state:
-            st.session_state.transcription_in_progress = False
+        # if 'transcription_in_progress' not in st.session_state:
+        #     st.session_state.transcription_in_progress = False
 
-        # Start transcription button
-        if st.button("Start Transcription") and not st.session_state.transcription_in_progress:
-            st.write("Transcription in progress...")
-            st.session_state.transcription_in_progress = True  # Set the flag to true
-            if transcription_task is None or not transcription_task.is_alive():
-                transcription_task = Thread(target=run_transcribe)
-                transcription_task.start()
+        # # Start transcription button
+        # if st.button("Start Transcription") and not st.session_state.transcription_in_progress:
+        #     st.write("Transcription in progress...")
+        #     st.session_state.transcription_in_progress = True  # Set the flag to true
+        #     if transcription_task is None or not transcription_task.is_alive():
+        #         transcription_task = Thread(target=run_transcribe)
+        #         transcription_task.start()
 
-        if st.session_state.transcription_in_progress:
-            if st.button("Stop Transcription"):
-                cancel_task = True  # Set the cancel flag to True to stop the task
-                st.write("Cancelling transcription....")
-                if transcription_task is not None:
-                    transcription_task.join()  # Ensure the background task ends gracefully
-                st.session_state.transcription_in_progress = False  # Reset transcription status
-                st.write("Transcription task stopped.")
-        st.markdown("<br>", unsafe_allow_html=True)
+        # if st.session_state.transcription_in_progress:
+        #     if st.button("Stop Transcription"):
+        #         cancel_task = True  # Set the cancel flag to True to stop the task
+        #         st.write("Cancelling transcription....")
+        #         if transcription_task is not None:
+        #             transcription_task.join()  # Ensure the background task ends gracefully
+        #         st.session_state.transcription_in_progress = False  # Reset transcription status
+        #         st.write("Transcription task stopped.")
+        # st.markdown("<br>", unsafe_allow_html=True)
 
         # Add the logout button to the sidebar
         with st.sidebar:
