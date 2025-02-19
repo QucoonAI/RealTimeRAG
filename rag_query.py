@@ -1,59 +1,97 @@
 import os
 import boto3
+import asyncio
 import json
+import streamlit as st
+import streamlit_authenticator as stauth
+from threading import Thread
+import yaml
+from yaml.loader import SafeLoader
+from dotenv import load_dotenv
 from pinecone import Pinecone
+from main import basic_transcribe
 
-# Initialize models and clients
+load_dotenv()
 
+# Access environment variables
+aws_region = os.getenv("AWS_REGION")
+modelId = os.getenv("MODEL_ID")
+emb_modelId = os.getenv("EMB_MODEL_ID")
+pinecone_api_key = os.getenv("PINECONE_API_KEY")
+index_name = os.getenv("PINECONE_INDEX_NAME")
+
+# Create session and clients
 session = boto3.Session()
-bedrock = boto3.client(service_name='bedrock-runtime', region_name="us-east-1")
-modelId = "anthropic.claude-3-5-sonnet-20240620-v1:0"
-emb_modelId = "amazon.titan-embed-text-v2:0"
-pc = Pinecone(api_key="pcsk_6BwgYz_ADdw4fhbmhdCMF28chYaTrH64hKXeVn4y7xYHPCALaq6KhGsvkaaevDcQQDSPbK")
-index_name = "qucoon-realtimerag"
-index = pc.Index(index_name)
+bedrock = boto3.client(service_name='bedrock-runtime', region_name=aws_region)
+@st.cache_resource
+def init_pinecone():
+    pc = Pinecone(api_key=pinecone_api_key)
+    return pc.Index(index_name)
+# Initialize the Pinecone index
+index = init_pinecone()
 
-stats = index.describe_index_stats()
-total_vectors = stats['total_vector_count']
-print(total_vectors)
+# stats = index.describe_index_stats()
+# total_vectors = stats['total_vector_count']
+# print(total_vectors)
+
+transcription_task = None
+cancel_task = False
+async def transcribe_function():
+    try:
+        result = await basic_transcribe()
+        st.write(result)  # Display the result from the transcription
+    except asyncio.CancelledError:
+        st.write("Transcription has been cancelled.")
+
+def run_transcribe():
+    global transcription_task
+    try:
+        if not cancel_task:
+            asyncio.run(transcribe_function())
+    except asyncio.CancelledError:
+        st.write("Transcription task was cancelled.")
+
 
 prompt_template = """ 
-You are a AI assistant with access to knowledge about any event or conversation. You respond to the user question as if you have the event or conversation in your knowledge base.
-Answer questions about the event by using relevant information retrieved. 
-Your responses should be conversational, clear, and use simple grammar to ensure easy understanding. 
-If specific information is not in the transcript, let the user know politely.
+You are an AI assistant with access to knowledge about any event or conversation. You respond to the user question as if you have the event or conversation in your knowledge base.
+
+Your Responsibilities: 
+1. Answer questions about the event by using relevant information retrieved. 
+2. Your responses should be conversational, clear, and use simple grammar to ensure easy understanding. 
+3. If specific information is not in the transcript, let the user know politely.
+4. Be affirming with your responses. For example:
+    Never use "seems" in your responses like: "It seems like the last point made was about funding."
+    Instead, say: "The last point made was about funding."
 
 Example Questions:
 
-What were the main topics discussed at the event?
-Who were the key speakers and what did they talk about?
-Can you summarize the event's main takeaways?
-Was there any mention of future events or initiatives?
-What challenges or issues were highlighted during the event?
+- What were the main topics discussed at the event?
+- Who were the key speakers and what did they talk about?
+- Can you summarize the event's main takeaways?
+- Was there any mention of future events or initiatives?
+- What challenges or issues were highlighted during the event?
 
 Response Guidelines:
-1.Privacy: 
+1. Privacy: 
     a. Never let the user know you are getting the information from a transcript. Always make it seem like you have the information inherently.
-    b. Do not mention the word "transcript" in your response, you'd be breaching user privacy.
-2.Use Contextual Information: Directly quote or paraphrase from the transcript when answering questions.
-3.Keep It Conversational: Respond as if you are having a friendly chat with the user.
-4.Simple Grammar: Use short sentences and straightforward vocabulary to explain concepts.
-5.Acknowledge Gaps: If the transcript doesnt cover the question, respond with phrases like:
-    a. "I'm sorry, but I know if that was discussed at the event"
-    b. "Theres no information about that based on the conversation today."
-6.Encourage Follow-Up Questions:
+    b. Do not mention the word "transcript" in your response; you'd be breaching user privacy.
+2. Use Contextual Information: Directly quote or paraphrase from the transcript when answering questions.
+3. Keep It Conversational: Respond as if you are having a friendly chat with the user.
+4. Simple Grammar: Use short sentences and straightforward vocabulary to explain concepts.
+5. Acknowledge Gaps: If the transcript doesn't cover the question, respond with phrases like:
+    a. "I'm sorry, but I don't know if that was discussed at the event."
+    b. "There's no information about that based on the conversation today."
+6. Encourage Follow-Up Questions:
     a. "Would you like to know more about any specific part of the conversation?"
-    b."Let me know if there's anything else youre curious about!"
+    b. "Let me know if there's anything else you're curious about!"
 
 Sample Response:
 User Question: What were the main topics discussed at the event?
-AI Response: The event mainly discussed the challenges early startups face, including funding and infrastructure. 
-It also highlighted how technology has changed over the years, especially in Nigeria. 
-If you want more details on a specific topic, let me know!
+AI Response: The event mainly discussed the challenges early startups face, including funding and infrastructure. It also highlighted how technology has changed over the years, especially in Nigeria. If you want more details on a specific topic, let me know!
 
 <context>
 {context}
-<context>
+</context>
 
 Question: {question}
 
@@ -70,7 +108,7 @@ def get_answer_from_event(query):
     Returns:
     - str: The answer generated by the AI model based on the FAQ context.
     """
-   # Create the input_data for the embedding request
+    # Create the input_data for the embedding request
     input_data = {
         "inputText": query,  # Embedding each chunk separately
         "dimensions": 1024,
@@ -83,7 +121,7 @@ def get_answer_from_event(query):
         modelId=emb_modelId,
         contentType="application/json",
         accept="*/*",
-        body=body
+        body= body
     )
 
     response_body = response['body'].read()
@@ -92,19 +130,15 @@ def get_answer_from_event(query):
     # Extract the query embedding from the response
     query_embedding = response_json['embedding']
 
-    print("####### Get information.....")
     # Perform the similarity search in Pinecone to retrieve the most relevant context
     result = index.query(vector=query_embedding, top_k=3, include_metadata=True)
 
     # Format the context string from the results
     context = []
-    count = 0
     for match in result['matches']:
         context.append(f"Score: {match['score']}, Metadata: {match['metadata']}")
-        count += 1
     context_string = "\n".join(context)
     
-
     # Use Bedrock to generate a helpful answer based on the context and the query
     message_list = [{"role": "user", "content": [{"text": query}]}]
     response = bedrock.converse(
@@ -118,22 +152,114 @@ def get_answer_from_event(query):
             "temperature": 1
         },
     )
-
+    print()
     # Extract and return the response message
     response_message = response['output']['message']['content'][0]['text']
     return response_message
 
-# # Example usage
-#query = "who owns Rubies MFB?"
-#answer = get_answer_from_faq(query)
-#print(answer)
+# Load configuration
+with open('config.yaml') as file:
+    config = yaml.load(file, Loader=SafeLoader)
 
-while True:
-    question = input("What would you like to know about the event (type 'exit' to quit): ")
-    
-    if question.lower() == "exit":
-        print("Exiting... Goodbye!")
-        break  # Exit the loop
-    
-    answer = get_answer_from_event(question)
-    print("ANSWER:", answer)
+# Initialize authenticator
+authenticator = stauth.Authenticate(
+    config['credentials'],
+    config['cookie']['name'],
+    config['cookie']['key'],
+    config['cookie']['expiry_days']
+)
+
+# Initialize the authenticator
+if 'authenticator' not in st.session_state:
+    st.session_state['authenticator'] = authenticator
+
+
+authenticator.login('main')
+
+# Check authentication status
+if st.session_state.get("authentication_status"):
+    # Check user role
+    if st.session_state["name"] == 'oracle':
+        # Display chatbot interface
+        st.title("RealTime Event Chat")
+        # Initialize chat history if not already present
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+        
+        if len(st.session_state.messages) == 0:
+            # Immediately send the assistant's welcome message if it's the first message
+            assistant_message = "Hello! How can I assist you with the event today?"
+            st.session_state.messages.append({"role": "assistant", "content": assistant_message})
+
+        # Display existing messages
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        # Handle user input
+        if user_input := st.chat_input("Type your message here..."):
+            st.session_state.messages.append({"role": "user", "content": user_input})
+            with st.chat_message("user"):
+                st.markdown(user_input)
+
+            # Generate assistant's response
+            assistant_response = get_answer_from_event(user_input)
+            
+            # Stream the assistant's response
+            with st.chat_message("assistant"):
+                st.markdown(assistant_response)
+            # Append assistant's response to chat history
+            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+
+        # Add space after the chat input and chat history
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Add the logout button to the sidebar
+        with st.sidebar:
+            if authenticator.logout('Logout', 'main'):
+                st.session_state.clear()  # Optionally clear the session state
+
+                # After logout, show a message and exit the chatbot
+                st.write("You have logged out successfully!")
+                st.stop()  # Stop the script execution to prevent further chatbot interaction
+
+    elif st.session_state["name"] == 'yk':
+        st.title("Welcome to the RealTime Transcribe")
+        st.write("Starting transcription...")
+        # Start transcription button
+        if 'transcription_in_progress' not in st.session_state:
+            st.session_state.transcription_in_progress = False
+
+        # Start transcription button
+        if st.button("Start Transcription") and not st.session_state.transcription_in_progress:
+            st.write("Transcription in progress...")
+            st.session_state.transcription_in_progress = True  # Set the flag to true
+            if transcription_task is None or not transcription_task.is_alive():
+                transcription_task = Thread(target=run_transcribe)
+                transcription_task.start()
+
+        if st.session_state.transcription_in_progress:
+            if st.button("Stop Transcription"):
+                cancel_task = True  # Set the cancel flag to True to stop the task
+                st.write("Cancelling transcription....")
+                if transcription_task is not None:
+                    transcription_task.join()  # Ensure the background task ends gracefully
+                st.session_state.transcription_in_progress = False  # Reset transcription status
+                st.write("Transcription task stopped.")
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Add the logout button to the sidebar
+        with st.sidebar:
+            if authenticator.logout('Logout', 'main'):
+                st.session_state.clear()  # Optionally clear the session state
+
+                # After logout, show a message and exit the chatbot
+                st.write("You have logged out successfully!")
+                st.stop()  # Stop the script execution to prevent further chatbot interaction
+    else:
+        st.write(f"Welcome {st.session_state['name']}!")
+        authenticator.logout('Logout', 'main')
+elif st.session_state.get("authentication_status") is False:
+    st.error('Username/password is incorrect')
+elif st.session_state.get("authentication_status")is None:
+    st.warning('Please enter your username and password')
