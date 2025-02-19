@@ -210,8 +210,9 @@ if st.session_state.get("authentication_status"):
             with st.chat_message("user"):
                 st.markdown(user_input)
 
-            # Generate assistant's response
-            assistant_response = get_answer_from_event(user_input)
+            with st.spinner("Generating response..."):
+             # Generate assistant's response
+                assistant_response = get_answer_from_event(user_input)
             
             # Stream the assistant's response
             with st.chat_message("assistant"):
