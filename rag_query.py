@@ -14,23 +14,24 @@ from pinecone import Pinecone
 load_dotenv()
 
 # Access environment variables
-# aws_region = os.getenv("AWS_REGION")
-# modelId = os.getenv("MODEL_ID")
-# emb_modelId = os.getenv("EMB_MODEL_ID")
-# pinecone_api_key = os.getenv("PINECONE_API_KEY")
-# index_name = os.getenv("PINECONE_INDEX_NAME")
+aws_region = os.getenv("AWS_REGION")
+modelId = os.getenv("MODEL_ID")
+emb_modelId = os.getenv("EMB_MODEL_ID")
+pinecone_api_key = os.getenv("PINECONE_API_KEY")
+index_name = os.getenv("PINECONE_INDEX_NAME")
 
-aws_region = st.secrets.AWS_REGION
-aws_access_key_id = st.secrets.AWS_ACCESS_KEY_ID
-aws_secret_access_key = st.secrets.AWS_SECRET_ACCESS_KEY
-modelId = st.secrets.MODEL_ID
-emb_modelId = st.secrets.EMB_MODEL_ID
-pinecone_api_key = st.secrets.PINECONE_API_KEY
-index_name = st.secrets.PINECONE_INDEX_NAME
+# aws_region = st.secrets.AWS_REGION
+# aws_access_key_id = st.secrets.AWS_ACCESS_KEY_ID
+# aws_secret_access_key = st.secrets.AWS_SECRET_ACCESS_KEY
+# modelId = st.secrets.MODEL_ID
+# emb_modelId = st.secrets.EMB_MODEL_ID
+# pinecone_api_key = st.secrets.PINECONE_API_KEY
+# index_name = st.secrets.PINECONE_INDEX_NAME
 
 # Create session and clients
 #session = boto3.Session()
-bedrock = boto3.client(service_name='bedrock-runtime', region_name = "us-east-1" , aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)    
+#bedrock = boto3.client(service_name='bedrock-runtime', region_name = "us-east-1" , aws_access_key_id=aws_access_key_id, aws_secret_access_key=aws_secret_access_key)    
+bedrock = boto3.client(service_name='bedrock-runtime', region_name = "us-east-1")
 @st.cache_resource
 def init_pinecone():
     pc = Pinecone(api_key=pinecone_api_key)
@@ -206,6 +207,7 @@ if st.session_state.get("authentication_status"):
 
         # Handle user input
         if user_input := st.chat_input("Type your message here..."):
+
             st.session_state.messages.append({"role": "user", "content": user_input})
             with st.chat_message("user"):
                 st.markdown(user_input)
