@@ -1,11 +1,15 @@
-import asyncio
-import sounddevice
 import streamlit as st
+import asyncio
 from amazon_transcribe.client import TranscribeStreamingClient
 from amazon_transcribe.handlers import TranscriptResultStreamHandler
 from amazon_transcribe.model import TranscriptEvent
-from ragEmbed import async_update_db, startup  # Import startup
+import pyaudio  # Import PyAudio
 
+# Placeholder for your async_update_db function
+async def async_update_db(chunk):
+    """Simulates upserting to a vector database."""
+    await asyncio.sleep(0.5)  # Simulate some network latency
+    print(f"Upserted chunk: {chunk[:50]}...")
 
 class MyEventHandler(TranscriptResultStreamHandler):
     def __init__(self, output_stream, text_area):
@@ -76,30 +80,20 @@ class MyEventHandler(TranscriptResultStreamHandler):
             print(f"Failed to upsert: {str(e)}")
 
 
-async def mic_stream():
-    loop = asyncio.get_running_loop()
-    input_queue = asyncio.Queue()
-
-    def callback(indata, frame_count, time_info, status):
-        loop.call_soon_threadsafe(input_queue.put_nowait, (bytes(indata), status))
-
-    stream = sounddevice.RawInputStream(
-        channels=1,
-        samplerate=16000,
-        callback=callback,
-        blocksize=1024 * 2,
-        dtype="int16",
-    )
-    with stream:
+async def write_chunks(stream, p, audio_stream):
+    """Sends audio chunks from PyAudio to the transcription service."""
+    try:
         while True:
-            indata, status = await input_queue.get()
-            yield indata, status
+            data = audio_stream.read(1024, exception_on_overflow=False)  # Read audio data
+            if st.session_state.get('stop_requested', False):
+                 break
+            await stream.input_stream.send_audio_event(audio_chunk=data)  # Send audio data
+            await asyncio.sleep(0)  # Yield control
 
-
-async def write_chunks(stream):
-    async for chunk, status in mic_stream():
-        await stream.input_stream.send_audio_event(audio_chunk=chunk)
-    await stream.input_stream.end_stream()
+    except asyncio.CancelledError:
+        print("write_chunks cancelled")
+    finally:
+        print("write_chunks finished")
 
 
 async def basic_transcribe(text_area):
@@ -111,59 +105,81 @@ async def basic_transcribe(text_area):
     )
     handler = MyEventHandler(stream.output_stream, text_area)
 
+    # Initialize PyAudio
+    p = pyaudio.PyAudio()
+    audio_stream = p.open(format=pyaudio.paInt16, channels=1, rate=16000, input=True,
+                    frames_per_buffer=1024)
+
     try:
         await asyncio.gather(
-            write_chunks(stream),
+            write_chunks(stream, p, audio_stream),  # Pass PyAudio objects
             handler.handle_events(),
         )
+
+    except asyncio.CancelledError:
+        print("basic_transcribe was cancelled.")
+        # No need to explicitly stop the stream here; the finally block will handle it
+
     finally:
+        print("basic_transcribe cleaning up")
         await handler.final_flush()
         await stream.input_stream.end_stream()
-
+        audio_stream.stop_stream()  # Stop the PyAudio stream
+        audio_stream.close()
+        p.terminate()  # Terminate PyAudio
+        print("basic_transcribe cleanup complete")
 
 # def main():
 #     st.title("Live Transcription and VectorDB Upsert")
 
 #     # Create a placeholder for the text area
 #     text_area = st.empty()
-#     text_area.write("Click 'Start' to begin transcription.") # Initial instructions
+#     text_area.write("Click 'Start' to begin transcription.")
 
-#     # Use an expander for running the transcription
 #     with st.expander("Run Transcription"):
-#         # Use session_state to store the running state
 #         if 'running' not in st.session_state:
 #             st.session_state.running = False
-
 #         if "task" not in st.session_state:
 #             st.session_state.task = None
-
-#         if 'stop_requested' not in st.session_state: # Add stop_requested
+#         if 'stop_requested' not in st.session_state:
 #              st.session_state.stop_requested = False
+
 
 #         if not st.session_state.running:
 #             if st.button("Start"):
 #                 st.session_state.running = True
 #                 st.session_state.stop_requested = False
-#                 # Use rerun to immediately update the UI and start the process
 #                 st.rerun()
 #         else:
 #             if st.button("Stop"):
 #                 st.session_state.running = False
-#                 st.session_state.stop_requested = True # Request a stop
+#                 st.session_state.stop_requested = True
 #                 if st.session_state.task:
-#                     st.session_state.task.cancel()  # Cancel the current task
+#                     st.session_state.task.cancel()
+
 
 #         if st.session_state.running:
-#             loop = asyncio.new_event_loop()  # Create a *new* event loop
+#             loop = asyncio.new_event_loop()
 #             asyncio.set_event_loop(loop)
 #             try:
-#                 loop.run_until_complete(startup())  # Initialize clients
-#                 loop.run_until_complete(basic_transcribe(text_area))  # Run transcription
+#                 loop.run_until_complete(startup()) # Assuming you still have startup
+#                 st.session_state.task = loop.create_task(basic_transcribe(text_area))
+#                 loop.run_until_complete(st.session_state.task)
+
+#             except asyncio.CancelledError:
+#                 print("Outer loop was cancelled.")
+#                 # text_area.write("Transcription cancelled (outer).") # May not need
 
 #             finally:
 #                 loop.close()
-#                 # Reset running state when transcription completes.  Very important!
 #                 st.session_state.running = False
+#                 st.session_state.stop_requested = False
 
 # if __name__ == "__main__":
 #     main()
+
+# async def startup():
+#     """Simulates initialization."""
+#     await asyncio.sleep(0.1)  # Simulate some setup time
+#     print("Startup complete")
+#     return
