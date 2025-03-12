@@ -9,7 +9,8 @@ import yaml
 from yaml.loader import SafeLoader
 from dotenv import load_dotenv
 from pinecone import Pinecone
-#from main import basic_transcribe
+from ragEmbed import startup  # Import startup
+from sound import basic_transcribe
 
 load_dotenv()
 
@@ -190,7 +191,7 @@ if st.session_state.get("authentication_status"):
     # Check user role
     if st.session_state["name"] == 'oracle':
         # Display chatbot interface
-        st.title("RealTime Event Chat")
+        st.title("Yharn Chat 🤖")
         # Initialize chat history if not already present
         if "messages" not in st.session_state:
             st.session_state.messages = []
@@ -235,38 +236,54 @@ if st.session_state.get("authentication_status"):
                 st.stop()  # Stop the script execution to prevent further chatbot interaction
 
     elif st.session_state["name"] == 'yk':
-        st.title("Welcome to the RealTime Transcribe")
-        st.write("Starting transcription...")
-        # Start transcription button
-        # if 'transcription_in_progress' not in st.session_state:
-        #     st.session_state.transcription_in_progress = False
+        st.title("Welcome to Yharn Transcribe 🎙️")
+        text_area = st.empty()
+        text_area.write("Click 'Start' to begin transcription.") # Initial instructions
+        # Use an expander for running the transcription
+        with st.expander("Run Transcription"):
+            # Use session_state to store the running state
+            if 'running' not in st.session_state:
+                st.session_state.running = False
 
-        # # Start transcription button
-        # if st.button("Start Transcription") and not st.session_state.transcription_in_progress:
-        #     st.write("Transcription in progress...")
-        #     st.session_state.transcription_in_progress = True  # Set the flag to true
-        #     if transcription_task is None or not transcription_task.is_alive():
-        #         transcription_task = Thread(target=run_transcribe)
-        #         transcription_task.start()
+            if "task" not in st.session_state:
+                st.session_state.task = None
+                
+            if 'stop_requested' not in st.session_state: # Add stop_requested
+                st.session_state.stop_requested = False
 
-        # if st.session_state.transcription_in_progress:
-        #     if st.button("Stop Transcription"):
-        #         cancel_task = True  # Set the cancel flag to True to stop the task
-        #         st.write("Cancelling transcription....")
-        #         if transcription_task is not None:
-        #             transcription_task.join()  # Ensure the background task ends gracefully
-        #         st.session_state.transcription_in_progress = False  # Reset transcription status
-        #         st.write("Transcription task stopped.")
-        # st.markdown("<br>", unsafe_allow_html=True)
+            if not st.session_state.running:
+                if st.button("Start"):
+                    st.session_state.running = True
+                    st.session_state.stop_requested = False
+                    # Use rerun to immediately update the UI and start the process
+                    st.rerun()
+            else:
+                if st.button("Stop"):
+                    st.session_state.running = False
+                    st.session_state.stop_requested = True # Request a stop
+                    if st.session_state.task:
+                        st.session_state.task.cancel()  # Cancel the current task
 
-        # Add the logout button to the sidebar
-        with st.sidebar:
-            if authenticator.logout('Logout', 'main'):
-                st.session_state.clear()  # Optionally clear the session state
+            if st.session_state.running:
+                loop = asyncio.new_event_loop()  # Create a *new* event loop
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(startup())  # Initialize clients
+                    loop.run_until_complete(basic_transcribe(text_area))  # Run transcription
 
-                # After logout, show a message and exit the chatbot
-                st.write("You have logged out successfully!")
-                st.stop()  # Stop the script execution to prevent further chatbot interaction
+                finally:
+                    loop.close()
+                    # Reset running state when transcription completes.  Very important!
+                    st.session_state.running = False
+
+            # Add the logout button to the sidebar
+            with st.sidebar:
+                if authenticator.logout('Logout', 'main'):
+                    st.session_state.clear()  # Optionally clear the session state
+
+                    # After logout, show a message and exit the chatbot
+                    st.write("You have logged out successfully!")
+                    st.stop()  # Stop the script execution to prevent further chatbot interaction
     else:
         st.write(f"Welcome {st.session_state['name']}!")
         authenticator.logout('Logout', 'main')
