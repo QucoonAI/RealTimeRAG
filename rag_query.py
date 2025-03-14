@@ -9,8 +9,6 @@ import yaml
 from yaml.loader import SafeLoader
 from dotenv import load_dotenv
 from pinecone import Pinecone
-from ragEmbed import startup  # Import startup
-from sound import basic_transcribe
 
 load_dotenv()
 
@@ -44,22 +42,6 @@ index = init_pinecone()
 # total_vectors = stats['total_vector_count']
 # print(total_vectors)
 
-transcription_task = None
-cancel_task = False
-# async def transcribe_function():
-#     try:
-#         result = await basic_transcribe()
-#         st.write(result)  # Display the result from the transcription
-#     except asyncio.CancelledError:
-#         st.write("Transcription has been cancelled.")
-
-# def run_transcribe():
-#     global transcription_task
-#     try:
-#         if not cancel_task:
-#             asyncio.run(transcribe_function())
-#     except asyncio.CancelledError:
-#         st.write("Transcription task was cancelled.")
 
 
 prompt_template = """ 
@@ -239,51 +221,15 @@ if st.session_state.get("authentication_status"):
         st.title("Welcome to Yharn Transcribe 🎙️")
         text_area = st.empty()
         text_area.write("Click 'Start' to begin transcription.") # Initial instructions
-        # Use an expander for running the transcription
-        with st.expander("Run Transcription"):
-            # Use session_state to store the running state
-            if 'running' not in st.session_state:
-                st.session_state.running = False
 
-            if "task" not in st.session_state:
-                st.session_state.task = None
-                
-            if 'stop_requested' not in st.session_state: # Add stop_requested
-                st.session_state.stop_requested = False
+        with st.sidebar:
+            if authenticator.logout('Logout', 'main'):
+                st.session_state.clear()  # Optionally clear the session state
 
-            if not st.session_state.running:
-                if st.button("Start"):
-                    st.session_state.running = True
-                    st.session_state.stop_requested = False
-                    # Use rerun to immediately update the UI and start the process
-                    st.rerun()
-            else:
-                if st.button("Stop"):
-                    st.session_state.running = False
-                    st.session_state.stop_requested = True # Request a stop
-                    if st.session_state.task:
-                        st.session_state.task.cancel()  # Cancel the current task
+                # After logout, show a message and exit the chatbot
+                st.write("You have logged out successfully!")
+                st.stop()  # Stop the script execution to prevent further chatbot interaction
 
-            if st.session_state.running:
-                loop = asyncio.new_event_loop()  # Create a *new* event loop
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(startup())  # Initialize clients
-                    loop.run_until_complete(basic_transcribe(text_area))  # Run transcription
-
-                finally:
-                    loop.close()
-                    # Reset running state when transcription completes.  Very important!
-                    st.session_state.running = False
-
-            # Add the logout button to the sidebar
-            with st.sidebar:
-                if authenticator.logout('Logout', 'main'):
-                    st.session_state.clear()  # Optionally clear the session state
-
-                    # After logout, show a message and exit the chatbot
-                    st.write("You have logged out successfully!")
-                    st.stop()  # Stop the script execution to prevent further chatbot interaction
     else:
         st.write(f"Welcome {st.session_state['name']}!")
         authenticator.logout('Logout', 'main')
