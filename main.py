@@ -1,20 +1,14 @@
+from fastapi import FastAPI, BackgroundTasks
 import asyncio
 import queue
 import numpy as np
-import streamlit as st
-from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
 from amazon_transcribe.client import TranscribeStreamingClient
 from amazon_transcribe.handlers import TranscriptResultStreamHandler
 from amazon_transcribe.model import TranscriptEvent
 from asyncio import Semaphore
 from ragEmbed import async_update_db
 
-# WebRTC Configuration
-RTC_CONFIGURATION = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-)
-
-# Queue for audio frames
+app = FastAPI()
 audio_queue = queue.Queue()
 
 class MyEventHandler(TranscriptResultStreamHandler):
@@ -33,14 +27,12 @@ class MyEventHandler(TranscriptResultStreamHandler):
             for alt in result.alternatives:
                 new_text = alt.transcript
                 
-                # Avoid repeating words
                 if new_text.startswith(self.last_transcript):
                     new_text = new_text[len(self.last_transcript):].strip()
 
                 new_words = new_text.split()
                 if new_words:
                     self.current_words.extend(new_words)
-                    st.write("[Streaming]:", new_text)  # Display in Streamlit UI
                     self.last_transcript = alt.transcript
 
                 if len(self.current_words) >= self.chunk_size:
@@ -70,18 +62,10 @@ class MyEventHandler(TranscriptResultStreamHandler):
         async with self.upsert_sem:
             try:
                 await async_update_db(chunk)
-                st.write(f"[Upserted] {chunk[:50]}...")
             except Exception as e:
-                st.error(f"Failed to upsert: {str(e)}")
-
-def audio_callback(frame):
-    """Handles audio frames from WebRTC and stores in queue"""
-    audio_data = np.frombuffer(frame.to_ndarray(), dtype=np.int16)
-    audio_queue.put(audio_data.tobytes())
-    return frame  # Return the frame unmodified
+                print(f"Failed to upsert: {str(e)}")
 
 async def write_chunks(stream):
-    """Continuously sends audio chunks to AWS Transcribe"""
     while True:
         if not audio_queue.empty():
             chunk = audio_queue.get()
@@ -89,7 +73,6 @@ async def write_chunks(stream):
     await stream.input_stream.end_stream()
 
 async def basic_transcribe():
-    """Handles real-time transcription"""
     client = TranscribeStreamingClient(region="us-east-1")
     stream = await client.start_stream_transcription(
         language_code="en-US",
@@ -107,18 +90,7 @@ async def basic_transcribe():
         await handler.final_flush()
         await stream.input_stream.end_stream()
 
-# Streamlit UI
-st.title("Real-Time Speech Transcription with WebRTC")
-
-webrtc_ctx = webrtc_streamer(
-    key="audio-only",
-    mode=WebRtcMode.SENDRECV,
-    rtc_configuration=RTC_CONFIGURATION,
-    audio_frame_callback=audio_callback,
-    video_frame_callback=None,
-    media_stream_constraints={"video": False, "audio": True},
-)
-
-if webrtc_ctx.audio_receiver:
-    st.write("Receiving audio stream...")
-    asyncio.run(basic_transcribe())  # Start transcription
+@app.post("/transcribe/start")
+def start_transcription(background_tasks: BackgroundTasks):
+    background_tasks.add_task(asyncio.run, basic_transcribe())
+    return {"message": "Transcription started"}
