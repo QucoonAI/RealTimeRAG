@@ -8,6 +8,7 @@ from threading import Thread
 import yaml
 from yaml.loader import SafeLoader
 from dotenv import load_dotenv
+from main import basic_transcribe  # Import transcription function
 from pinecone import Pinecone
 
 load_dotenv()
@@ -145,9 +146,6 @@ if st.session_state.get("authentication_status"):
 
         text_area = st.empty()
         text_area.write("Click 'Start' to begin transcription.")  # Initial instructions
-
-        from main import basic_transcribe  # Import transcription function
-
         # JavaScript for real-time microphone input
         js_audio_script = """
             <script>
@@ -197,7 +195,6 @@ if st.session_state.get("authentication_status"):
             if st.button("▶ Start Transcription"):
                 st.write("🟢 Transcription started!")
                 asyncio.run(basic_transcribe())# Run transcription in the background
-                
                 st.components.v1.html("<script>startRecording();</script>", height=0)
 
         with col2:
