@@ -111,27 +111,24 @@ if st.session_state.get("authentication_status"):
         st.text("") 
         st.text("") 
 
-        col1, col2 = st.columns(2)
+        col1,col2,col3 = st.columns(3)
 
-        if "transcription_started" not in st.session_state:
-            st.session_state.transcription_started = False
-        with col1:
-            if st.button("▶ Start Transcription"):
-                st.write("🟢 Transcription started!")
-                st.components.v1.html("<script>startRecording();</script>", height=0)
-                time.sleep(5)  # Wait for 60 seconds
-                st.session_state.transcription_started = True
-        
+        # Initialize session state variables
+        if "transcription_active" not in st.session_state:
+            st.session_state.transcription_active = False
 
         with col2:
-            if st.button("⏹ Stop Transcription"):
-                st.write("🛑 Transcription stopped.")
-                st.components.v1.html("<script>stopRecording();</script>", height=0)
-                st.session_state.transcription_started = False
+            # Create a single button that toggles between start and stop
+            
+            
+            if st.button("▶ Start Recording"):
+                st.write("🟢 Transcription started!")
+                st.components.v1.html("<script>startRecording();</script>", height=0)
+                time.sleep(5)  # Wait for 5 seconds
+                st.session_state.transcription_active = True
 
-        # Show chat input after transcription timer ends
-        if st.session_state.transcription_started is True:
-            st.write("🟢 Transcription started!")
+        # Show chat input after transcription is active
+        if st.session_state.transcription_active:
             if "messages" not in st.session_state:
                 st.session_state.messages = []
 
