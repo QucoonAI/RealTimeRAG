@@ -5,6 +5,8 @@ from tenacity import retry, wait_exponential, stop_after_attempt
 from asyncio import Semaphore
 import asyncio
 import json
+from datetime import datetime
+timestamp = datetime.utcnow().isoformat() 
 
 # Initialize Pinecone client
 pc = Pinecone(
@@ -92,7 +94,10 @@ async def async_update_db(chunk: str):
             await loop.run_in_executor(None, index.upsert, [{
                 "id": chunk_id,
                 "values": embedding,
-                "metadata": {"chunk": chunk}
+                "metadata": {
+                    "chunk": chunk,
+                    "time_param": timestamp  # Store time inside metadata
+                }
             }])
 
             print(f"[Async Updated] {chunk[:50]}...")

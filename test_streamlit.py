@@ -115,13 +115,14 @@ if st.session_state.get("authentication_status"):
 
         if "transcription_started" not in st.session_state:
             st.session_state.transcription_started = False
+
         with col1:
             if st.button("▶ Start Transcription"):
+                st.session_state.transcription_started = True
                 st.write("🟢 Transcription started!")
                 st.components.v1.html("<script>startRecording();</script>", height=0)
                 time.sleep(5)  # Wait for 60 seconds
-                st.session_state.transcription_started = True
-        
+                st.session_state.transcription_started = False  # Reset flag after timer
 
         with col2:
             if st.button("⏹ Stop Transcription"):
@@ -129,25 +130,16 @@ if st.session_state.get("authentication_status"):
                 st.components.v1.html("<script>stopRecording();</script>", height=0)
                 st.session_state.transcription_started = False
 
-        # Show chat input after transcription timer ends
-        if st.session_state.transcription_started is True:
-            st.write("🟢 Transcription started!")
-            if "messages" not in st.session_state:
+        if "messages" not in st.session_state:
                 st.session_state.messages = []
+        # Show chat input after transcription timer ends
+        if not st.session_state.transcription_started:
+            # if "messages" not in st.session_state:
+            #     st.session_state.messages = []
 
             if len(st.session_state.messages) == 0:
                 assistant_message = "Hello! How can I assist you with the event today?"
-                st.session_state.messages.append({"role": "assistant", "content": ""})  # Initialize with empty content
-                
-                placeholder = st.empty()  # Placeholder for streaming
-                
-                streamed_text = ""
-                for char in assistant_message:
-                    streamed_text += char
-                    placeholder.markdown(f"**{streamed_text}**")  # Update dynamically
-                    time.sleep(0.01)  # Adjust speed of typing effect
-
-                st.session_state.messages[-1]["content"] = streamed_text  # Store final message
+                st.session_state.messages.append({"role": "assistant", "content": assistant_message})
 
             for message in st.session_state.messages:
                 with st.chat_message(message["role"]):
@@ -172,10 +164,13 @@ if st.session_state.get("authentication_status"):
                 st.stop()
 
     elif st.session_state["name"] == 'yk':
-        st.title("Welcome to Yharn NonTranscribe 🎙️")
+        st.title("Welcome to Yharn Transcribe 🎙️")
 
         text_area = st.empty()
         text_area.write("Click 'Start' to begin transcription.")  # Initial instructions
+
+        from main import basic_transcribe  # Import transcription function
+
         # JavaScript for real-time microphone input
         js_audio_script = """
             <script>
@@ -224,9 +219,9 @@ if st.session_state.get("authentication_status"):
         with col1:
             if st.button("▶ Start Transcription"):
                 st.write("🟢 Transcription started!")
-                # asyncio.run(basic_transcribe())# Run transcription in the background
+                asyncio.run(basic_transcribe())# Run transcription in the background
                 
-                # st.components.v1.html("<script>startRecording();</script>", height=0)
+                st.components.v1.html("<script>startRecording();</script>", height=0)
 
         with col2:
             if st.button("⏹ Stop Transcription"):
