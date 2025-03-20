@@ -2,15 +2,14 @@ import os
 import boto3
 import asyncio
 import json
+import time
 import streamlit as st
 import streamlit_authenticator as stauth
 from threading import Thread
 import yaml
 from yaml.loader import SafeLoader
 from dotenv import load_dotenv
-from main import basic_transcribe  # Import transcription function
 from pinecone import Pinecone
-
 load_dotenv()
 
 # Access environment variables
@@ -108,32 +107,63 @@ authenticator.login('main')
 # Check authentication status
 if st.session_state.get("authentication_status"):
     if st.session_state["name"] == 'oracle':
-        st.title("Yharn Chat 🤖")
+        st.title("Welcome to Yharn Transcribe 🎙️")
+        st.text("") 
+        st.text("") 
 
-        if "messages" not in st.session_state:
-            st.session_state.messages = []
+        col1, col2 = st.columns(2)
 
-        if len(st.session_state.messages) == 0:
-            assistant_message = "Hello! How can I assist you with the event today?"
-            st.session_state.messages.append({"role": "assistant", "content": assistant_message})
+        if "transcription_started" not in st.session_state:
+            st.session_state.transcription_started = False
+        with col1:
+            if st.button("▶ Start Transcription"):
+                st.write("🟢 Transcription started!")
+                st.components.v1.html("<script>startRecording();</script>", height=0)
+                time.sleep(5)  # Wait for 60 seconds
+                st.session_state.transcription_started = True
+        
 
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+        with col2:
+            if st.button("⏹ Stop Transcription"):
+                st.write("🛑 Transcription stopped.")
+                st.components.v1.html("<script>stopRecording();</script>", height=0)
+                st.session_state.transcription_started = False
 
-        if user_input := st.chat_input("Type your message here..."):
-            st.session_state.messages.append({"role": "user", "content": user_input})
-            with st.chat_message("user"):
-                st.markdown(user_input)
+        # Show chat input after transcription timer ends
+        if st.session_state.transcription_started is True:
+            st.write("🟢 Transcription started!")
+            if "messages" not in st.session_state:
+                st.session_state.messages = []
 
-            with st.spinner("Generating response..."):
-                assistant_response = get_answer_from_event(user_input)
+            if len(st.session_state.messages) == 0:
+                assistant_message = "Hello! How can I assist you with the event today?"
+                st.session_state.messages.append({"role": "assistant", "content": ""})  # Initialize with empty content
+                
+                placeholder = st.empty()  # Placeholder for streaming
+                
+                streamed_text = ""
+                for char in assistant_message:
+                    streamed_text += char
+                    placeholder.markdown(f"**{streamed_text}**")  # Update dynamically
+                    time.sleep(0.01)  # Adjust speed of typing effect
 
-            with st.chat_message("assistant"):
-                st.markdown(assistant_response)
-            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
+                st.session_state.messages[-1]["content"] = streamed_text  # Store final message
 
-        st.markdown("<br>", unsafe_allow_html=True)
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
+
+            if user_input := st.chat_input("Type your message here..."):
+                st.session_state.messages.append({"role": "user", "content": user_input})
+                with st.chat_message("user"):
+                    st.markdown(user_input)
+
+                with st.spinner("Generating response..."):
+                    assistant_response = get_answer_from_event(user_input)
+
+                with st.chat_message("assistant"):
+                    st.markdown(assistant_response)
+                st.session_state.messages.append({"role": "assistant", "content": assistant_response})
 
         with st.sidebar:
             if authenticator.logout('Logout', 'main'):
@@ -142,7 +172,7 @@ if st.session_state.get("authentication_status"):
                 st.stop()
 
     elif st.session_state["name"] == 'yk':
-        st.title("Welcome to Yharn Transcribe 🎙️")
+        st.title("Welcome to Yharn NonTranscribe 🎙️")
 
         text_area = st.empty()
         text_area.write("Click 'Start' to begin transcription.")  # Initial instructions
@@ -194,8 +224,9 @@ if st.session_state.get("authentication_status"):
         with col1:
             if st.button("▶ Start Transcription"):
                 st.write("🟢 Transcription started!")
-                asyncio.run(basic_transcribe())# Run transcription in the background
-                st.components.v1.html("<script>startRecording();</script>", height=0)
+                # asyncio.run(basic_transcribe())# Run transcription in the background
+                
+                # st.components.v1.html("<script>startRecording();</script>", height=0)
 
         with col2:
             if st.button("⏹ Stop Transcription"):

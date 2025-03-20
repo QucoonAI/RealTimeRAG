@@ -2,6 +2,7 @@ import os
 import boto3
 import asyncio
 import json
+import time
 import streamlit as st
 import streamlit_authenticator as stauth
 from threading import Thread
@@ -9,7 +10,6 @@ import yaml
 from yaml.loader import SafeLoader
 from dotenv import load_dotenv
 from pinecone import Pinecone
-
 load_dotenv()
 
 # Access environment variables
@@ -107,32 +107,55 @@ authenticator.login('main')
 # Check authentication status
 if st.session_state.get("authentication_status"):
     if st.session_state["name"] == 'oracle':
-        st.title("Yharn Chat 🤖")
+        st.title("Welcome to Yharn Transcribe 🎙️")
+        st.text("") 
+        st.text("") 
+
+        col1, col2 = st.columns(2)
+
+        if "transcription_started" not in st.session_state:
+            st.session_state.transcription_started = False
+
+        with col1:
+            if st.button("▶ Start Transcription"):
+                st.session_state.transcription_started = True
+                st.write("🟢 Transcription started!")
+                st.components.v1.html("<script>startRecording();</script>", height=0)
+                time.sleep(5)  # Wait for 60 seconds
+                st.session_state.transcription_started = False  # Reset flag after timer
+
+        with col2:
+            if st.button("⏹ Stop Transcription"):
+                st.write("🛑 Transcription stopped.")
+                st.components.v1.html("<script>stopRecording();</script>", height=0)
+                st.session_state.transcription_started = False
 
         if "messages" not in st.session_state:
-            st.session_state.messages = []
+                st.session_state.messages = []
+        # Show chat input after transcription timer ends
+        if not st.session_state.transcription_started:
+            # if "messages" not in st.session_state:
+            #     st.session_state.messages = []
 
-        if len(st.session_state.messages) == 0:
-            assistant_message = "Hello! How can I assist you with the event today?"
-            st.session_state.messages.append({"role": "assistant", "content": assistant_message})
+            if len(st.session_state.messages) == 0:
+                assistant_message = "Hello! How can I assist you with the event today?"
+                st.session_state.messages.append({"role": "assistant", "content": assistant_message})
 
-        for message in st.session_state.messages:
-            with st.chat_message(message["role"]):
-                st.markdown(message["content"])
+            for message in st.session_state.messages:
+                with st.chat_message(message["role"]):
+                    st.markdown(message["content"])
 
-        if user_input := st.chat_input("Type your message here..."):
-            st.session_state.messages.append({"role": "user", "content": user_input})
-            with st.chat_message("user"):
-                st.markdown(user_input)
+            if user_input := st.chat_input("Type your message here..."):
+                st.session_state.messages.append({"role": "user", "content": user_input})
+                with st.chat_message("user"):
+                    st.markdown(user_input)
 
-            with st.spinner("Generating response..."):
-                assistant_response = get_answer_from_event(user_input)
+                with st.spinner("Generating response..."):
+                    assistant_response = get_answer_from_event(user_input)
 
-            with st.chat_message("assistant"):
-                st.markdown(assistant_response)
-            st.session_state.messages.append({"role": "assistant", "content": assistant_response})
-
-        st.markdown("<br>", unsafe_allow_html=True)
+                with st.chat_message("assistant"):
+                    st.markdown(assistant_response)
+                st.session_state.messages.append({"role": "assistant", "content": assistant_response})
 
         with st.sidebar:
             if authenticator.logout('Logout', 'main'):
